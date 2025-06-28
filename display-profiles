@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import json
+import argparse
+import subprocess
+import time
+import threading
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+import hashlib
+
+try:
+    import curses
+    CURSES_AVAILABLE = True
+except ImportError:
+    CURSES_AVAILABLE = False
+    
+class DisplayManager:
+    def __init__(self):
+        self.config_dir = Path.home() / '.config' / 'display-profiles'
+        self.config_file = self.config_dir / 'profiles.json'
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.profiles = self.load_profiles()
+        
+    def load_profiles(self) -> Dict:
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return {}
+        return {}
+    
+    def save_profiles(self):
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.profiles, f, indent=2)
+        except IOError as e:
+            print(f"Error saving profiles: {e}")
+            
+    def run_command(self, cmd: List[str]) -> Tuple[bool, str]:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return True, result.stdout
+        except subprocess.CalledProcessError as e:
+            return False, e.stderr
+        except FileNotFoundError:
+            return False, f"Command not found: {cmd[0]}"
+    
+    def get_xrandr_info(self) -> Tuple[bool, str]:
+        return self.run_command(['xrandr', '--query'])
+    
+    def get_kscreen_info(self) -> Tuple[bool, str]:
+        return self.run_command(['kscreen-doctor', '-o'])
+    
+    def detect_displays(self) -> Dict[str, List[str]]:
+        displays = {'xrandr': [], 'kscreen': []}
+        
+        success, output = self.get_xrandr_info()
+        if success: 
+            for line in output.split('\n'):
+                if ' connected' in line:
+                    display_name = line.split()[0]
+                    displays['xrandr'].append(display_name)
+            
+        success, output = self.get_kscreen_info()
+        if success:
+            for line in output.split('\n'):
+                if 'Output:' in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        displays['kscreen'].append(parts[1])
+
+        return displays
+
+    def get_display_signature(self) -> str:
+        displays = self.detect_displays()
+        display_list = sorted(displays['xrandr']) + displays['kscreen']
+        signature = hashlib.md5('|'.join(display_list).encode()).hexdigest()[:8]
+        return signature
+    
+    def save_current_profile(self, name: str, backend: str = 'auto') -> bool:
+        if backend == 'auto':
+            xrandr_success, xrandr_config = self.get_xrandr_info()
+            kscreen_success, kscreen_config = self.get_kscreen_info()
+            
+            if xrandr_success:
+                backend = 'xrandr'
+                config = xrandr_config
+            elif kscreen_success:
+                backend = 'kscreen'
+                config = kscreen_config
+            else:
+                return False
+        elif backend == 'xrandr':
+            success, config = self.get_xrandr_info()
+            if not success:
+                return False
+        elif backend == 'kscreen':
+            success, config = self.get_kscreen_info()
+            if not success:
+                return False
+        else:
+            return False
+        
+        signature = self.get_display_signature()
+        
+        self.profiles[name] = {
+            'backend': backend,
+            'config': config,
+            'signature': signature,
+            'displays': self.detect_displays()
+        }
+        
+        self.save_profiles()
+        return True
+    
+class DisplayProfilesCLI:
+    def __init__(self):
+        self.manager = DisplayManager()
+        
+    def cmd_list(self, args):
+        profiles = self.manager.list_profiles()
+        if not profiles:
+            print("No profiles saved.")
+            return
+
+        print("Saved profiles:")
+        for name in profiles:
+            profile = self.manager.profiles[name]
+            backend = profile.get('backend', 'unknown')
+            signature = profile.get('signature', 'none')
+            print(f"  {name} ({backend}) [{signature}]")
+            
+    def cmd_save(self, args):
+        if self.manager.save_current_profile(args.name, args.backend):
+            print(f"Profiles '{args.name}' saved successfully.")
+        else:
+            print(f"Failed to save profile '{args.name}'.")
+            
+def main():
+    parser = argparse.ArgumentParser(description='Display Profiles Manager')
+    
+    subparsers = parser.add_subparsers(dest='command',help='Available commands')
+    
+    save_parser = subparsers.add_parser('save', help='Save current display configuration')
+    save_parser.add_argument('name', help='Profile name')
+    save_parser.add_argument('--backend', choices=['auto','xrandr','kscreen'],
+                             default='auro', help='Backend to use')
+    
+    args = parser.parse_args()
+    if args.command:
+        cli = DisplayProfilesCLI()
+        cmd_method = getattr(cli, f'cmd_{args.command}',None)
+        if cmd_method:
+            cmd_method(args)
+        else:
+            parser.print_help()
+            
+if __name__ == '__main__':
+    main()
