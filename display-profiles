@@ -117,8 +117,70 @@ class DisplayManager:
         self.save_profiles()
         return True
     
+    def apply_profiles(self, name: str) -> bool:
+        if name not in self.profiles:
+            return False
+        
+        profile = self.profiles[name]
+        backend = profile['backend']
+        
+        if backend == 'xrandr':
+            return self.apply_xrandr_profile(profile)
+        elif backend == 'kscreen':
+            return self.apply_kscreen_profile(profile)
+        
+        return False
+    
+    def apply_xrandr_profile(self, profile: Dict) -> bool:
+        config_lines = profile['config'].split('\n')
+        cmd = ['xrandr']
+        
+        for line in config_lines:
+            if ' connected' in line:
+                parts = line.split()
+                display_name = parts[0]
+                
+                if 'primary' in line:
+                    cmd.extend(['--output', display_name, '--primary'])
+                else:
+                    cmd.extend(['--output', display_name])
+                    
+                if len(parts) > 2 and 'x' in parts[2]:
+                    resolution_info = parts[2]
+                    if '+' in resolution_info:
+                        res_parts = resolution_info.split('+')
+                        resolution = res_parts[0]
+                        if 'x' in resolution:
+                            cmd.extend(['--mode',resolution])
+                        if len(res_parts) >= 3:
+                            cmd.extend(['--pos', f"{res_parts[1]}x{res_parts[2]}"])
+        
+        success, output = self.run_command(cmd)
+        return success
+    
+    def apply_kscreen_profile(self, profile: Dict) -> bool:
+        success, _ = self.run_command(['kscreen-doctor'])
+        return success
+    
     def list_profiles(self) -> List[str]:
         return list(self.profiles.keys())
+    
+    def delete_profile(self, name: str) -> bool:
+        if name in self.profiles:
+            del self.profiles[name]
+            self.save_profiles()
+            return True
+        return False
+    
+    def auto_switch_profile(self) -> Optional[str]:
+        current_signature = self.get_display_signature()
+        
+        for name, profile in self.profiles.items():
+            if profile.get('signature') == current_signature:
+                if self.apply_profiles(name):
+                    return name
+        
+        return None
     
 class DisplayProfilesCLI:
     def __init__(self):
