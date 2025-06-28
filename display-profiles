@@ -117,7 +117,7 @@ class DisplayManager:
         self.save_profiles()
         return True
     
-    def apply_profiles(self, name: str) -> bool:
+    def apply_profile(self, name: str) -> bool:
         if name not in self.profiles:
             return False
         
@@ -177,7 +177,7 @@ class DisplayManager:
         
         for name, profile in self.profiles.items():
             if profile.get('signature') == current_signature:
-                if self.apply_profiles(name):
+                if self.apply_profile(name):
                     return name
         
         return None
@@ -205,6 +205,60 @@ class DisplayProfilesCLI:
         else:
             print(f"Failed to save profile '{args.name}'.")
             
+    def cmd_apply(self, args):
+        if self.manager.apply_profile(args.name):
+            print(f"Profile '{args.name}' applied successfully.")
+        else:
+            print(f"Failed to apply profile '{args.name}'.")
+            
+    def cmd_delete(self, args):
+        if self.manager.delete_profile(args.name):
+            print(f"Profile '{args.name}' deleted.")
+        else:
+            print(f"Profile '{args.name}' not found.")
+            
+    def cmd_detect(self, args):
+        displays = self.manager.detect_displays()
+        signature = self.manager.get_display_signature()
+        
+        print(f"Display signature: {signature}")
+        print("Connected displays:")
+        
+        if displays['xrandr']:
+            print("  xrandr:", ', '.join(displays['xrandr']))
+        
+        if displays['kscreen']:
+            print("  kscreen:", ', '.join(displays['kscreen']))
+            
+    def cmd_auto(self, args):
+        if args.deamon:
+            self.run_auto_deamon()
+        else:
+            profile = self.manager.auto_switch_profile()
+            if profile:
+                print(f"Auto-switched to profile: {profile}")
+            else:
+                print("No matching profile found for current display configuration.")
+            
+    def run_auto_deamon(self):
+        print("Starting auto-switch demon...")
+        last_signature = self.manager.get_display_signature()
+        
+        try:
+            while True:
+                time.sleep(2)
+                current_signature = self.manager.get_display_signature()
+                
+                if current_signature != last_signature:
+                    print(f"Display change detected: {last_signature} -> {current_signature}")
+                    profile = self.manager.auto_switch_profile()
+                    if profile:
+                        print(f"Auto-switched to profile: {profile}")
+                    last_signature = current_signature
+                    
+        except KeyboardInterrupt:
+            print("\nDeamon stopped.")
+            
 def main():
     parser = argparse.ArgumentParser(description='Display Profiles Manager')
     
@@ -217,7 +271,20 @@ def main():
     save_parser.add_argument('--backend', choices=['auto','xrandr','kscreen'],
                              default='auro', help='Backend to use')
     
+    apply_parser = subparsers.add_parser('apply', help='Apply saved profile')
+    apply_parser.add_argument('name', help='Profile name')
+    
+    delete_parser = subparsers.add_parser('delete', help='Delete saved profile')
+    delete_parser.add_argument('name', help='Profile name')
+    
+    subparsers.add_parser('detect', help='Detect connected displats')
+    
+    auto_parser = subparsers.add_parser('auto', help='Auto-switch profile')
+    auto_parser.add_argument('--deamon', action='store_true',
+                             help='Run as deamon, monitoring for changes')
+    
     args = parser.parse_args()
+    
     if args.command:
         cli = DisplayProfilesCLI()
         cmd_method = getattr(cli, f'cmd_{args.command}',None)
