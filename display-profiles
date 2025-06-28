@@ -117,6 +117,9 @@ class DisplayManager:
         self.save_profiles()
         return True
     
+    def list_profiles(self) -> List[str]:
+        return list(self.profiles.keys())
+    
 class DisplayProfilesCLI:
     def __init__(self):
         self.manager = DisplayManager()
@@ -144,6 +147,8 @@ def main():
     parser = argparse.ArgumentParser(description='Display Profiles Manager')
     
     subparsers = parser.add_subparsers(dest='command',help='Available commands')
+    
+    subparsers.add_parser('list', help='List saved profiles')
     
     save_parser = subparsers.add_parser('save', help='Save current display configuration')
     save_parser.add_argument('name', help='Profile name')
