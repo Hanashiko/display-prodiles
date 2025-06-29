@@ -258,9 +258,158 @@ class DisplayProfilesCLI:
                     
         except KeyboardInterrupt:
             print("\nDeamon stopped.")
+          
+class DisplayProfilesTUI:
+    def __init__(self):
+        self.manager = DisplayManager
+        
+    def run(self, stdscr):
+        curses.curs_set(0)
+        stdscr.keypad(True)
+        
+        current_selection = 0
+        profiles = []
+        
+        while True:
+            stdscr.clear()
+            profiles = self.manager.list_profiles()
+            
+            stdscr.addstr(0, 0, "Display PRofiles Manager", curses.A_BOLD)
+            stdscr.addstr(1, 0, "=" * 40)
+            
+            options = [
+                "List Profiles",
+                "Save Current Profile",
+                "Apply Profile",
+                "Delete Profile",
+                "Detect Displays",
+                "Auto Switch",
+                "Exit"
+            ]
+            
+            for i, option in enumerate(options):
+                if i == current_selection:
+                    stdscr.addstr(3 + i, 2, f"> {option}", curses.A_REVERSE)
+                else:
+                    stdscr.addstr(3 + i, 2, f"  {option}")
+                    
+            if profiles:
+                stdscr.addstr(12, 0, "Saved Profiles:", curses.A_BOLD)
+                for i, name in enumerate(profiles):
+                    profile = self.manager.profiles[name]
+                    backend = profile.get('backend','unknown')
+                    stdscr.addstr(13 + i, 2, f"{name} ({backend})")
+                    
+            stdscr.addstr(20, 0, "Use arrow keys to navigate, Enter to select, 'q' to quit")
+            stdscr.refresh()
+            
+            key = stdscr.getch()
+            
+            if key == ord('q'):
+                break
+            elif key == curses.KEY_UP:
+                current_selection = max(0, current_selection - 1)
+            elif key == curses.KEY_DOWN:
+                current_selection = min(len(option) - 1, current_selection + 1)
+            elif key == curses.KEY_ENTER or key == 10:
+                self.handle_selection(stdscr, current_selection, options)
+                
+    def handle_selection(self, stdscr, selection, options):
+        if selection == 0:
+            self.show_message(stdscr, "Check the profiles list below")
+        elif selection == 1:
+            name = self.get_input(stdscr, "Enter profile name: ")
+            if name:
+                if self.manager.save_current_profile(name):
+                    self.show_message(stdscr, f"Profile '{name}' saved!")
+                else:
+                    self.show_message(stdscr, "Failed to save profile")
+        elif selection == 2:
+            profiles = self.manager.list_profiles()
+            if profiles:
+                profile = self.select_from_list(stdscr, "Select profile to apply:", profiles)
+                if profile:
+                    if self.manager.apply_profile(profile):
+                        self.show_message(stdscr, f"Profile '{profile}' applied!")
+                    else:
+                        self.show_message(stdscr, "Failed to apply profile")
+            else:
+                self.show_message(stdscr, "No profiles available")
+        elif selection == 3:
+            profiles = self.manager.list_profiles()
+            if profiles:
+                profile = self.select_from_list(stdscr, "Select profile to delete:", profiles)
+                if profile:
+                    if self.manager.delete_profile(profile):
+                        self.show_message(stdscr, f"Profile '{profile}' deleted!")
+                    else:
+                        self.show_message(stdscr, "Failed to delete profile")
+            else:
+                self.show_message(stdscr, "No profiles available")
+        elif selection == 4:
+            displays = self.manager.detect_displays()
+            signature = self.manager.get_display_signature()
+            msg = f"Signature: {signature}\\n"
+            if displays['xrandr']:
+                msg += f"xrandr: {', '.join(displays['xrandr'])}\\n"
+            if displays['kscreen']:
+                msg += f"kscreen: {', '.join(displays['kscreen'])}"
+            self.show_message(stdscr, msg)
+        elif selection == 5:
+            profile = self.manager.auto_switch_profile()
+            if profile:
+                self.show_message(stdscr, f"Auto-switched to: {profile}")
+            else:
+                self.show_message(stdscr, "No matching profile found")
+        elif selection == 6:
+            return
+    
+    def get_input(self, stdscr, prompt):
+        curses.echo()
+        stdscr.addstr(22, 0, prompt)
+        stdscr.refresh()
+        text = stdscr.getstr(22, len(prompt)).decode('utf-8')
+        curses.noecho()
+        return text
+
+    def select_from_list(self, stdscr, prompt, items):
+        selection = 0
+        while True:
+            stdscr.clear()
+            stdscr.addstr(0, 0, prompt, curses.A_BOLD)
+            
+            for i, item in enumerate(items):
+                if i == selection:
+                    stdscr.addstr(2 + i, 2, f"> {item}", curses.A_REVERSE)
+                else:
+                    stdscr.addstr(2 + i, 2, f"  {item}")
+                    
+            stdscr.addstr(len(items) + 4, 0, "Enter to select, 'q' to cancel")
+            stdscr.refresh()
+            
+            key = stdscr.getch()
+            if key == ord('q'):
+                return None
+            elif key == curses.KEY_UP:
+                selection = max(0, selection - 1)
+            elif key == curses.KEY_DOWN:
+                selection = min(len(items) - 1, selection + 1)
+            elif key == curses.KEY_ENTER or key == 10:
+                return items[selection]
+    
+    def show_message(self, stdscr, message):
+        stdscr.clear()
+        lines = message.split('\\n')
+        for i, line in enumerate(lines):
+            stdscr.addstr(2 + i, 2, line)
+        stdscr.addstr(len(lines) + 4, 2, "Press any key to continue...")
+        stdscr.refresh()
+        stdscr.getch()
             
 def main():
     parser = argparse.ArgumentParser(description='Display Profiles Manager')
+    
+    parser.add_argument('--tui', action='store_true', help='Run in TUI mode')
     
     subparsers = parser.add_subparsers(dest='command',help='Available commands')
     
@@ -285,13 +434,22 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command:
+    if args.tui:
+        if not CURSES_AVAILABLE:
+            print("Error: curses not available. Install python3-curses package.")
+            sys.exit(1)
+        
+        tui = DisplayProfilesTUI()
+        curses.wrapper(tui.run)
+    elif args.command:
         cli = DisplayProfilesCLI()
         cmd_method = getattr(cli, f'cmd_{args.command}',None)
         if cmd_method:
             cmd_method(args)
         else:
             parser.print_help()
+    else:
+        parser.print_help()
             
 if __name__ == '__main__':
     main()
