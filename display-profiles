@@ -300,7 +300,9 @@ class DisplayProfilesTUI:
                     backend = profile.get('backend', 'unknown')
                     stdscr.addstr(13 + i, 2, f"{name} ({backend})")
             
-            stdscr.addstr(20, 0, "Use arrow keys to navigate, Enter to select, 'q' to quit")
+            height, width = stdscr.getmaxyx()
+            if height > 1:
+                stdscr.addstr(height - 1, 0, "Use arrow keys to navigate, Enter to select, 'q' to quit")
             stdscr.refresh()
             
             key = stdscr.getch()
