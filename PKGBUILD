@@ -15,4 +15,5 @@ sha256sums=('SKIP' 'SKIP')
 
 package() {
     install -Dm755 "$srcdir/display-profiles" "$pkgdir/usr/bin//display-profiles"
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
