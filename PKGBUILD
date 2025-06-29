@@ -10,8 +10,8 @@ depends=('python' 'ncurses')
 makedepends=()
 provides=('display-profiles')
 conflicts=('display-profiles')
-source=("display-profiles")
-sha256sums=('SKIP')
+source=("display-profiles" "LICENSE")
+sha256sums=('SKIP' 'SKIP')
 
 package() {
     install -Dm755 "$srcdir/display-profiles" "$pkgdir/usr/bin//display-profiles"
