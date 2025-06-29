@@ -77,7 +77,6 @@ class DisplayManager:
     
     def get_display_signature(self) -> str:
         displays = self.detect_displays()
-        # Create hash of connected displays
         display_list = sorted(displays['xrandr'] + displays['kscreen'])
         signature = hashlib.md5('|'.join(display_list).encode()).hexdigest()[:8]
         return signature
