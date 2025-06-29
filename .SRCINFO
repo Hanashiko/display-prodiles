@@ -11,6 +11,8 @@ pkgbase = display-profiles
 	conflicts = display-profiles
 	source = display-profiles
 	source = LICENSE
+	source = README.md
+	sha256sums = SKIP
 	sha256sums = SKIP
 	sha256sums = SKIP
 
