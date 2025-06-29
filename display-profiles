@@ -16,7 +16,7 @@ try:
     CURSES_AVAILABLE = True
 except ImportError:
     CURSES_AVAILABLE = False
-    
+
 class DisplayManager:
     def __init__(self):
         self.config_dir = Path.home() / '.config' / 'display-profiles'
@@ -39,7 +39,7 @@ class DisplayManager:
                 json.dump(self.profiles, f, indent=2)
         except IOError as e:
             print(f"Error saving profiles: {e}")
-            
+
     def run_command(self, cmd: List[str]) -> Tuple[bool, str]:
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -59,12 +59,12 @@ class DisplayManager:
         displays = {'xrandr': [], 'kscreen': []}
         
         success, output = self.get_xrandr_info()
-        if success: 
+        if success:
             for line in output.split('\n'):
                 if ' connected' in line:
                     display_name = line.split()[0]
                     displays['xrandr'].append(display_name)
-            
+        
         success, output = self.get_kscreen_info()
         if success:
             for line in output.split('\n'):
@@ -72,12 +72,13 @@ class DisplayManager:
                     parts = line.split()
                     if len(parts) >= 2:
                         displays['kscreen'].append(parts[1])
-
+        
         return displays
-
+    
     def get_display_signature(self) -> str:
         displays = self.detect_displays()
-        display_list = sorted(displays['xrandr']) + displays['kscreen']
+        # Create hash of connected displays
+        display_list = sorted(displays['xrandr'] + displays['kscreen'])
         signature = hashlib.md5('|'.join(display_list).encode()).hexdigest()[:8]
         return signature
     
@@ -144,14 +145,14 @@ class DisplayManager:
                     cmd.extend(['--output', display_name, '--primary'])
                 else:
                     cmd.extend(['--output', display_name])
-                    
+
                 if len(parts) > 2 and 'x' in parts[2]:
                     resolution_info = parts[2]
                     if '+' in resolution_info:
                         res_parts = resolution_info.split('+')
                         resolution = res_parts[0]
                         if 'x' in resolution:
-                            cmd.extend(['--mode',resolution])
+                            cmd.extend(['--mode', resolution])
                         if len(res_parts) >= 3:
                             cmd.extend(['--pos', f"{res_parts[1]}x{res_parts[2]}"])
         
@@ -179,44 +180,43 @@ class DisplayManager:
             if profile.get('signature') == current_signature:
                 if self.apply_profile(name):
                     return name
-        
         return None
-    
+
 class DisplayProfilesCLI:
     def __init__(self):
         self.manager = DisplayManager()
-        
+
     def cmd_list(self, args):
         profiles = self.manager.list_profiles()
         if not profiles:
             print("No profiles saved.")
             return
-
+        
         print("Saved profiles:")
         for name in profiles:
             profile = self.manager.profiles[name]
             backend = profile.get('backend', 'unknown')
             signature = profile.get('signature', 'none')
             print(f"  {name} ({backend}) [{signature}]")
-            
+
     def cmd_save(self, args):
         if self.manager.save_current_profile(args.name, args.backend):
-            print(f"Profiles '{args.name}' saved successfully.")
+            print(f"Profile '{args.name}' saved successfully.")
         else:
             print(f"Failed to save profile '{args.name}'.")
-            
+
     def cmd_apply(self, args):
         if self.manager.apply_profile(args.name):
             print(f"Profile '{args.name}' applied successfully.")
         else:
             print(f"Failed to apply profile '{args.name}'.")
-            
+
     def cmd_delete(self, args):
         if self.manager.delete_profile(args.name):
             print(f"Profile '{args.name}' deleted.")
         else:
             print(f"Profile '{args.name}' not found.")
-            
+
     def cmd_detect(self, args):
         displays = self.manager.detect_displays()
         signature = self.manager.get_display_signature()
@@ -229,24 +229,24 @@ class DisplayProfilesCLI:
         
         if displays['kscreen']:
             print("  kscreen:", ', '.join(displays['kscreen']))
-            
+
     def cmd_auto(self, args):
-        if args.deamon:
-            self.run_auto_deamon()
+        if args.daemon:
+            self.run_auto_daemon()
         else:
             profile = self.manager.auto_switch_profile()
             if profile:
                 print(f"Auto-switched to profile: {profile}")
             else:
                 print("No matching profile found for current display configuration.")
-            
-    def run_auto_deamon(self):
-        print("Starting auto-switch demon...")
+
+    def run_auto_daemon(self):
+        print("Starting auto-switch daemon...")
         last_signature = self.manager.get_display_signature()
         
         try:
             while True:
-                time.sleep(2)
+                time.sleep(2)  
                 current_signature = self.manager.get_display_signature()
                 
                 if current_signature != last_signature:
@@ -257,14 +257,14 @@ class DisplayProfilesCLI:
                     last_signature = current_signature
                     
         except KeyboardInterrupt:
-            print("\nDeamon stopped.")
-          
+            print("\nDaemon stopped.")
+
 class DisplayProfilesTUI:
     def __init__(self):
-        self.manager = DisplayManager
-        
+        self.manager = DisplayManager()
+    
     def run(self, stdscr):
-        curses.curs_set(0)
+        curses.curs_set(0) 
         stdscr.keypad(True)
         
         current_selection = 0
@@ -274,14 +274,14 @@ class DisplayProfilesTUI:
             stdscr.clear()
             profiles = self.manager.list_profiles()
             
-            stdscr.addstr(0, 0, "Display PRofiles Manager", curses.A_BOLD)
+            stdscr.addstr(0, 0, "Display Profiles Manager", curses.A_BOLD)
             stdscr.addstr(1, 0, "=" * 40)
             
             options = [
                 "List Profiles",
                 "Save Current Profile",
                 "Apply Profile",
-                "Delete Profile",
+                "Delete Profile", 
                 "Detect Displays",
                 "Auto Switch",
                 "Exit"
@@ -292,14 +292,14 @@ class DisplayProfilesTUI:
                     stdscr.addstr(3 + i, 2, f"> {option}", curses.A_REVERSE)
                 else:
                     stdscr.addstr(3 + i, 2, f"  {option}")
-                    
+
             if profiles:
                 stdscr.addstr(12, 0, "Saved Profiles:", curses.A_BOLD)
                 for i, name in enumerate(profiles):
                     profile = self.manager.profiles[name]
-                    backend = profile.get('backend','unknown')
+                    backend = profile.get('backend', 'unknown')
                     stdscr.addstr(13 + i, 2, f"{name} ({backend})")
-                    
+            
             stdscr.addstr(20, 0, "Use arrow keys to navigate, Enter to select, 'q' to quit")
             stdscr.refresh()
             
@@ -310,21 +310,21 @@ class DisplayProfilesTUI:
             elif key == curses.KEY_UP:
                 current_selection = max(0, current_selection - 1)
             elif key == curses.KEY_DOWN:
-                current_selection = min(len(option) - 1, current_selection + 1)
+                current_selection = min(len(options) - 1, current_selection + 1)
             elif key == curses.KEY_ENTER or key == 10:
                 self.handle_selection(stdscr, current_selection, options)
-                
+    
     def handle_selection(self, stdscr, selection, options):
-        if selection == 0:
+        if selection == 0:  
             self.show_message(stdscr, "Check the profiles list below")
-        elif selection == 1:
+        elif selection == 1:  
             name = self.get_input(stdscr, "Enter profile name: ")
             if name:
                 if self.manager.save_current_profile(name):
                     self.show_message(stdscr, f"Profile '{name}' saved!")
                 else:
                     self.show_message(stdscr, "Failed to save profile")
-        elif selection == 2:
+        elif selection == 2:  
             profiles = self.manager.list_profiles()
             if profiles:
                 profile = self.select_from_list(stdscr, "Select profile to apply:", profiles)
@@ -335,7 +335,7 @@ class DisplayProfilesTUI:
                         self.show_message(stdscr, "Failed to apply profile")
             else:
                 self.show_message(stdscr, "No profiles available")
-        elif selection == 3:
+        elif selection == 3: 
             profiles = self.manager.list_profiles()
             if profiles:
                 profile = self.select_from_list(stdscr, "Select profile to delete:", profiles)
@@ -346,7 +346,7 @@ class DisplayProfilesTUI:
                         self.show_message(stdscr, "Failed to delete profile")
             else:
                 self.show_message(stdscr, "No profiles available")
-        elif selection == 4:
+        elif selection == 4:  
             displays = self.manager.detect_displays()
             signature = self.manager.get_display_signature()
             msg = f"Signature: {signature}\\n"
@@ -355,13 +355,13 @@ class DisplayProfilesTUI:
             if displays['kscreen']:
                 msg += f"kscreen: {', '.join(displays['kscreen'])}"
             self.show_message(stdscr, msg)
-        elif selection == 5:
+        elif selection == 5: 
             profile = self.manager.auto_switch_profile()
             if profile:
                 self.show_message(stdscr, f"Auto-switched to: {profile}")
             else:
                 self.show_message(stdscr, "No matching profile found")
-        elif selection == 6:
+        elif selection == 6: 
             return
     
     def get_input(self, stdscr, prompt):
@@ -371,7 +371,7 @@ class DisplayProfilesTUI:
         text = stdscr.getstr(22, len(prompt)).decode('utf-8')
         curses.noecho()
         return text
-
+    
     def select_from_list(self, stdscr, prompt, items):
         selection = 0
         while True:
@@ -383,7 +383,7 @@ class DisplayProfilesTUI:
                     stdscr.addstr(2 + i, 2, f"> {item}", curses.A_REVERSE)
                 else:
                     stdscr.addstr(2 + i, 2, f"  {item}")
-                    
+            
             stdscr.addstr(len(items) + 4, 0, "Enter to select, 'q' to cancel")
             stdscr.refresh()
             
@@ -405,20 +405,19 @@ class DisplayProfilesTUI:
         stdscr.addstr(len(lines) + 4, 2, "Press any key to continue...")
         stdscr.refresh()
         stdscr.getch()
-            
+
 def main():
     parser = argparse.ArgumentParser(description='Display Profiles Manager')
-    
     parser.add_argument('--tui', action='store_true', help='Run in TUI mode')
     
-    subparsers = parser.add_subparsers(dest='command',help='Available commands')
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     subparsers.add_parser('list', help='List saved profiles')
     
     save_parser = subparsers.add_parser('save', help='Save current display configuration')
     save_parser.add_argument('name', help='Profile name')
-    save_parser.add_argument('--backend', choices=['auto','xrandr','kscreen'],
-                             default='auro', help='Backend to use')
+    save_parser.add_argument('--backend', choices=['auto', 'xrandr', 'kscreen'], 
+                           default='auto', help='Backend to use')
     
     apply_parser = subparsers.add_parser('apply', help='Apply saved profile')
     apply_parser.add_argument('name', help='Profile name')
@@ -426,11 +425,11 @@ def main():
     delete_parser = subparsers.add_parser('delete', help='Delete saved profile')
     delete_parser.add_argument('name', help='Profile name')
     
-    subparsers.add_parser('detect', help='Detect connected displats')
+    subparsers.add_parser('detect', help='Detect connected displays')
     
     auto_parser = subparsers.add_parser('auto', help='Auto-switch profile')
-    auto_parser.add_argument('--deamon', action='store_true',
-                             help='Run as deamon, monitoring for changes')
+    auto_parser.add_argument('--daemon', action='store_true', 
+                           help='Run as daemon, monitoring for changes')
     
     args = parser.parse_args()
     
@@ -443,13 +442,13 @@ def main():
         curses.wrapper(tui.run)
     elif args.command:
         cli = DisplayProfilesCLI()
-        cmd_method = getattr(cli, f'cmd_{args.command}',None)
+        cmd_method = getattr(cli, f'cmd_{args.command}', None)
         if cmd_method:
             cmd_method(args)
         else:
             parser.print_help()
     else:
         parser.print_help()
-            
+
 if __name__ == '__main__':
     main()
