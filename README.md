@@ -39,4 +39,46 @@ yay -S display-profiles
 ```bash
 git clone https://github.com/hanashiko/display-profiles.git
 cd display-profiles
+chmod +x install.sh
+sudo ./install.sh
 ```
+
+---
+
+## Usage
+
+### CLI Mode
+```bash
+display-profiles list
+display-profiles save my-setup
+display-profiles apply my-setup
+display-profiles auto
+display-profiles auto --deamon
+```
+
+### TUI Mode
+```bash
+display-profiles --tui
+```
+
+---
+
+## Auto Switch Deamon
+
+Start as a backend deamon:
+```bash
+display-profiles auto --deamon
+```
+> It will check display signature every 2 seconds and auto-apply a marching profile if available.
+
+--- 
+
+## License
+
+MIT License
+
+---
+
+## Author
+
+Hanashiko
