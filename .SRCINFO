@@ -10,6 +10,8 @@ pkgbase = display-profiles
 	provides = display-profiles
 	conflicts = display-profiles
 	source = display-profiles
+	source = LICENSE
+	sha256sums = SKIP
 	sha256sums = SKIP
 
 pkgname = display-profiles
