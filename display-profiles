@@ -318,7 +318,17 @@ class DisplayProfilesTUI:
     
     def handle_selection(self, stdscr, selection, options):
         if selection == 0:  
-            self.show_message(stdscr, "Check the profiles list below")
+            profiles = self.manager.list_profiles()
+            if not profiles:
+                self.show_message(stdscr, "No profiles saved.")
+            else:
+                lines = []
+                for name in profiles:
+                    profile = self.manager.profiles[name]
+                    backend = profile.get('backend', 'unknown')
+                    signature = profile.get('signature', 'none')
+                    lines.append(f"{name} ({backend}) [{signature}]")
+                self.show_message(stdscr, "\n".join(lines))
         elif selection == 1:  
             name = self.get_input(stdscr, "Enter profile name: ")
             if name:
